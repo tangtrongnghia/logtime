@@ -70,9 +70,12 @@ export async function submitTask(tasks) {
 
   // Format cookies for fetch
   const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+  console.log(cookieString)
 
   // Navigate to the account timelogs page
   await page.goto('https://wepro.rcvn.work/account/timelogs') // Replace with your target URL
+
+  console.log(111111)
 
   // Wait for the page to load completely
   await wait(2000) // Wait for 2 seconds
@@ -82,6 +85,8 @@ export async function submitTask(tasks) {
 
   // Wait for the modal to load
   await wait(2000) // Wait for 2 seconds
+
+  console.log(222222)
 
   // Extract task IDs and names from the dropdown
   const assignedtasks = await page.$$eval('select[name="task_id[]"] option', options => {
@@ -99,6 +104,8 @@ export async function submitTask(tasks) {
       return { id, code: projectCode }
     })
   })
+
+  console.log(assignedtasks)
 
   // Extract activities from the dropdown
   const activities = await page.$$eval('select[name="custom_fields_data[activity_1][]"] option', options => {
