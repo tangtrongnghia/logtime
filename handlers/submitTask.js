@@ -1,5 +1,5 @@
-import fetch from "node-fetch"
-import FormData from "form-data"
+import fetch from 'node-fetch'
+import FormData from 'form-data'
 import puppeteer from 'puppeteer'
 
 /**
@@ -63,7 +63,7 @@ export async function submitTask(tasks) {
 
   // Get the _token value from the hidden input field
   const token = await page.$eval('input[name="_token"]', el => el.value)
-  formData.append("_token", token) // Append the token to formData
+  formData.append('_token', token) // Append the token to formData
 
   // Get cookies
   const cookies = await page.cookies()
@@ -125,35 +125,37 @@ export async function submitTask(tasks) {
   formData.append("f_slack_username", "")
   formData.append("redirect_url", "")
   formData.append("user_id", userId)
-  formData.append("start_date", new Date().toISOString().slice(0, 10)) // ngày hiện tại
+  formData.append("start_date", new Date().toISOString().slice(0, 10))
 
 
   for (const task of tasks) {
     for (const assignedtask of assignedtasks) {
       if (assignedtask.code == task.code) {
+        task.activity = task.activity.replace(/[</]/g, '-')
+
         const activity = activities.find(item => item.label === task.activity)
 
-        formData.append("project_id_check[]", "")
-        formData.append("task_id[]", assignedtask.id)
-        formData.append("custom_fields_data[activity_1][]", activity?.value)
-        formData.append("memo[]", task.note)
-        formData.append("wp_task_time[]", task.time)
+        formData.append('project_id_check[]', '')
+        formData.append('task_id[]', assignedtask.id || '')
+        formData.append('custom_fields_data[activity_1][]', activity?.value || '')
+        formData.append('memo[]', task.note || activity?.value || '')
+        formData.append('wp_task_time[]', task.time || 0.1)
         break
       }
     }
   }
 
   // Use fetch with the cookies
-  const response = await fetch("https://wepro.rcvn.work/account/timelogs/multi_store_simple", {
+  const response = await fetch('https://wepro.rcvn.work/account/timelogs/multi_store_simple', {
     method: "POST",
     headers: {
-      "accept": "application/json, text/javascript, */*; q=0.01",
-      "accept-language": "en-US,en;q=0.9,vi;q=0.8,ja;q=0.7",
-      "authorization": "Basic " + btoa(`${process.env.BASIC_AUTH_USER}:${process.env.BASIC_AUTH_PW}`), // Adjust if needed
-      "cache-control": "no-cache",
-      "pragma": "no-cache",
-      "cookie": cookieString, // Include the formatted cookies here
-      "x-requested-with": "XMLHttpRequest",
+      'accept': 'application/json, text/javascript, */*; q=0.01',
+      'accept-language': 'en-US,en;q=0.9,vi;q=0.8,ja;q=0.7',
+      'authorization': 'Basic ' + btoa(`${process.env.BASIC_AUTH_USER}:${process.env.BASIC_AUTH_PW}`),
+      'cache-control': 'no-cache',
+      'pragma': 'no-cache',
+      'cookie': cookieString, // Include the formatted cookies here
+      'x-requested-with': 'XMLHttpRequest',
     },
     body: formData
   });

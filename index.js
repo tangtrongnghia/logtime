@@ -17,8 +17,8 @@ app.post('/submit-tasks', async (req, res) => {
     const result = await submitTask(tasks);
     res.json({ success: true, result });
   } catch (error) {
-    console.error("Error handling tasks:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    console.error('Error handling tasks:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });
 
