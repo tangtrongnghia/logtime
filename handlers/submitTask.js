@@ -19,9 +19,12 @@ export async function submitTask(tasks) {
 
   // Launch a new browser instance
   const browser = await puppeteer.launch({
-    headless: "new",
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
+    headless: false,
   })
+  // const browser = await puppeteer.launch({
+  //   headless: "new",
+  //   args: ['--no-sandbox', '--disable-setuid-sandbox']
+  // })
   const page = await browser.newPage()
 
   // Navigate to the desired URL with Basic Auth
@@ -31,7 +34,7 @@ export async function submitTask(tasks) {
   const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
   // Wait for 2 seconds
-  await wait(2000)
+  // await wait(2000)
 
   // Check if the login form is present
   const loginFormSelector = 'input[name="email"]'
@@ -56,10 +59,10 @@ export async function submitTask(tasks) {
   }
 
   // Now navigate to the desired URL after login
-  await page.goto('https://wepro.rcvn.work') // Replace with your target URL
+  // await page.goto('https://wepro.rcvn.work') // Replace with your target URL
 
   // Wait for the page to load completely
-  await wait(2000) // Wait for 2 seconds
+  // await wait(2000) // Wait for 2 seconds
 
   // Get the _token value from the hidden input field
   const token = await page.$eval('input[name="_token"]', el => el.value)
@@ -70,19 +73,18 @@ export async function submitTask(tasks) {
 
   // Format cookies for fetch
   const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-  console.log(cookieString)
 
   // Navigate to the account timelogs page
   await page.goto('https://wepro.rcvn.work/account/timelogs') // Replace with your target URL
 
   // Wait for the page to load completely
-  await wait(2000) // Wait for 2 seconds
+  await wait(1000) // Wait for 2 seconds
 
   // Click the button to open the modal
   await page.click('a.btn.btn-primary.rounded.f-14.p-2.mr-3.openRightModal.float-left') // Adjust the selector as needed
 
   // Wait for the modal to load
-  await wait(2000) // Wait for 2 seconds
+  await wait(1000) // Wait for 1 seconds
 
   // Extract task IDs and names from the dropdown
   const assignedtasks = await page.$$eval('select[name="task_id[]"] option', options => {
