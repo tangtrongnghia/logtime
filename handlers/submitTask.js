@@ -1,6 +1,7 @@
 import fetch from 'node-fetch'
 import FormData from 'form-data'
 import puppeteer from 'puppeteer'
+import { saveCookies, loadCookies } from '../utils/cookieManager.js'
 
 /**
  * @typedef {Object} Task
@@ -16,6 +17,7 @@ import puppeteer from 'puppeteer'
  */
 export async function submitTask(tasks) {
   const formData = new FormData()
+  // const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
   // Launch a new browser instance
   const puppeteerOptions = process.env.APP_ENV == 'local'
@@ -24,23 +26,30 @@ export async function submitTask(tasks) {
   const browser = await puppeteer.launch(puppeteerOptions)
   const page = await browser.newPage()
 
-  // Navigate to the desired URL with Basic Auth
-  await page.goto(`https://${process.env.BASIC_AUTH_USER}:${process.env.BASIC_AUTH_PW}@wepro.rcvn.work`)
+  // Try to load saved cookies
+  const savedCookies = await loadCookies()
+  if (savedCookies) {
+    await page.setCookie(...savedCookies)
+  }
 
-  // Custom wait function
-  const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+  await page.authenticate({
+    username: process.env.BASIC_AUTH_USER,
+    password: process.env.BASIC_AUTH_PW
+  });
 
-  // Wait for 2 seconds
-  // await wait(2000)
+  // Navigate directly to timelogs page with Basic Auth
+  const baseUrl = 'https://wepro.rcvn.work'
+  await page.goto(`${baseUrl}/account/timelogs/multi_create_simple`, { waitUntil: 'networkidle0' })
 
-  // Check if the login form is present
-  const loginFormSelector = 'input[name="email"]'
-  const isLoginFormPresent = await page.$(loginFormSelector) !== null
+  // Check if we were redirected to login page
+  const currentUrl = page.url()
 
-  if (isLoginFormPresent) {
+  if (currentUrl.includes('/login')) {
+    console.log('Session expired, performing login...')
+
     // Fill in the email and password fields
-    await page.type('input[name="email"]', process.env.WEPRO_USER) // Replace with your email
-    await page.type('input[name="password"]', process.env.WEPRO_PW) // Replace with your password
+    await page.type('input[name="email"]', process.env.WEPRO_USER)
+    await page.type('input[name="password"]', process.env.WEPRO_PW)
 
     // Check the "Remember Me" checkbox if needed
     const rememberMeCheckbox = await page.$('input[name="remember"]')
@@ -48,40 +57,38 @@ export async function submitTask(tasks) {
       await rememberMeCheckbox.click()
     }
 
-    // Submit the login form
+    // Submit the login form and wait for navigation to timelogs page
     await Promise.all([
-      page.click('button[type="submit"]'), // Adjust the selector for the submit button
-      page.waitForNavigation({ waitUntil: 'networkidle0' }), // Wait for navigation to complete
+      page.click('button[type="submit"]'),
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
     ])
+
+    await page.reload({ waitUntil: 'networkidle0' });
+
+    // Save cookies after successful login
+    const cookies = await page.cookies()
+    await saveCookies(cookies)
+    console.log('Login successful, cookies saved')
+  } else {
+    console.log('Using saved cookies, no login required')
   }
-
-  // Now navigate to the desired URL after login
-  // await page.goto('https://wepro.rcvn.work') // Replace with your target URL
-
-  // Wait for the page to load completely
-  // await wait(2000) // Wait for 2 seconds
 
   // Get the _token value from the hidden input field
   const token = await page.$eval('input[name="_token"]', el => el.value)
-  formData.append('_token', token) // Append the token to formData
+  formData.append('_token', token)
 
-  // Get cookies
+  // Get current cookies
   const cookies = await page.cookies()
+  const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
 
-  // Format cookies for fetch
-  const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+  // // Click the button to open the modal
+  // await page.click('a.btn.btn-primary.rounded.f-14.p-2.mr-3.openRightModal.float-left')
 
-  // Navigate to the account timelogs page
-  await page.goto('https://wepro.rcvn.work/account/timelogs') // Replace with your target URL
-
-  // Wait for the page to load completely
-  await wait(1000) // Wait for 2 seconds
-
-  // Click the button to open the modal
-  await page.click('a.btn.btn-primary.rounded.f-14.p-2.mr-3.openRightModal.float-left') // Adjust the selector as needed
+  // // Wait for modal selector to appear
+  // await page.waitForSelector('#save-timelog-form', { visible: true });
 
   // Wait for the modal to load
-  await wait(1000) // Wait for 1 seconds
+  // await wait(1000)
 
   // Extract task IDs and names from the dropdown
   const assignedtasks = await page.$$eval('select[name="task_id[]"] option', options => {
@@ -91,9 +98,8 @@ export async function submitTask(tasks) {
 
       let projectCode = null
       if (name) {
-        // Tìm pattern sau dấu chấm: #20xxxx.08 hoặc 202504.005
         const match = name.match(/\.(#?[a-zA-Z0-9]{6,}\.\d{2,})/)
-        projectCode = match ? match[1] : null
+        projectCode = match ? match[1].replace(/^#+/, '') : null
       }
 
       return { id, code: projectCode }
@@ -127,11 +133,11 @@ export async function submitTask(tasks) {
   formData.append("user_id", userId)
   formData.append("start_date", new Date().toISOString().slice(0, 10))
 
-
   for (const task of tasks) {
     for (const assignedtask of assignedtasks) {
       if (assignedtask.code == task.code) {
         task.activity = task.activity.replace(/[</]/g, '-')
+        task.status = true
 
         const activity = activities.find(item => item.label === task.activity)
 
@@ -143,6 +149,8 @@ export async function submitTask(tasks) {
         break
       }
     }
+
+    task.status = !!task.status
   }
 
   // Use fetch with the cookies
@@ -154,28 +162,21 @@ export async function submitTask(tasks) {
       'authorization': 'Basic ' + btoa(`${process.env.BASIC_AUTH_USER}:${process.env.BASIC_AUTH_PW}`),
       'cache-control': 'no-cache',
       'pragma': 'no-cache',
-      'cookie': cookieString, // Include the formatted cookies here
+      'cookie': cookieString,
       'x-requested-with': 'XMLHttpRequest',
     },
     body: formData
   });
 
-  // Check if the response is OK
   if (!response.ok) {
-    const errorText = await response.text() // Get the response body as text
-    console.error(`Error: ${response.status} - ${errorText}`) // Log the error
+    const errorText = await response.text()
+    console.error(`Error: ${response.status} - ${errorText}`)
     throw new Error(`HTTP error! status: ${response.status}`)
   }
 
-  // Handle the response
   const data = await response.json()
 
-  const result = tasks.map(task => {
-    return {
-      ...task,
-      status: data.status,
-    }
-  })
+  tasks.status = data.status
 
-  return result
+  return tasks
 }
